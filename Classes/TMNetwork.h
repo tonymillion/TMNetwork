@@ -53,6 +53,12 @@
                   success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
                   failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure;
 
+-(NSURLSessionTask *)PUT:(NSString*)path
+                  asJSON:(BOOL)asJSON
+                  params:(id)params
+                 success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
+                 failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure;
+
 -(NSURLSessionTask*)DELETE:(NSString*)path
                    success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
                    failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure;

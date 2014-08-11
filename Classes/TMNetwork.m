@@ -273,6 +273,80 @@
     return task;
 }
 
+-(NSURLSessionTask *)PUT:(NSString*)path
+                  asJSON:(BOOL)asJSON
+                  params:(id)params
+                 success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
+                 failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
+{
+    [[TMNetworkActivityIndicatorManager sharedManager] incrementActivityCount];
+    
+    NSError * error;
+    NSURL *url = [NSURL URLWithString:path
+                        relativeToURL:self.baseURL];
+    
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
+    
+    [request setHTTPMethod:@"PUT"];
+    
+    [request setAllHTTPHeaderFields:_headers];
+    
+    // set up the post body data pls!
+    
+    NSData * body = nil;
+    if(params)
+    {
+        NSString *charset = (__bridge NSString *)CFStringConvertEncodingToIANACharSetName(CFStringConvertNSStringEncodingToEncoding(NSUTF8StringEncoding));
+        if (asJSON)
+        {
+            [request setValue:[NSString stringWithFormat:@"application/json; charset=%@", charset]
+           forHTTPHeaderField:@"Content-Type"];
+            
+            body = [NSJSONSerialization dataWithJSONObject:params
+                                                   options:0
+                                                     error:&error];
+        }
+        else
+        {
+            [request setValue:[NSString stringWithFormat:@"application/x-www-form-urlencoded; charset=%@", charset]
+           forHTTPHeaderField:@"Content-Type"];
+            
+            NSString * encodedparams = [params URLParameters];
+            
+            body = [encodedparams dataUsingEncoding:NSUTF8StringEncoding];
+        }
+        
+        if(!body)
+        {
+            failure(nil, nil, nil, error);
+            [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
+            
+            return nil;
+        }
+        [request setHTTPBody:body];
+    }
+    else
+    {
+        body= [@"" dataUsingEncoding:NSUTF8StringEncoding];
+    }
+    
+    NSURLSessionTask * task = [self.session uploadTaskWithRequest:request
+                                                         fromData:body
+                                                completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                                                    [self dealWithResponseStuff:data
+                                                                       response:response
+                                                                          error:error
+                                                                        success:success
+                                                                        failure:failure];
+                                                    
+                                                    [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
+                                                }];
+    
+    [task resume];
+    return task;
+}
+
+
 -(NSURLSessionTask *)GET:(NSString*)path
                   params:(NSDictionary*)params
                  success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
