@@ -289,7 +289,7 @@ static NSString * MIMETypeForExtension(NSString * extension)
 
 #pragma mark - TMMultipartInputStream
 
-@interface TMMultipartInputStream : NSObject
+@interface TMMultipartInputStream ()
 
 @property (nonatomic, strong) NSMutableArray *parts;
 @property (nonatomic, strong) NSString *boundary;
