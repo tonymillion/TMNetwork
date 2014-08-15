@@ -1,17 +1,17 @@
 /*
  Copyright (c) 2011-2014, Tony Million.
  All rights reserved.
- 
+
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions are met:
- 
+
  1. Redistributions of source code must retain the above copyright notice, this
  list of conditions and the following disclaimer.
- 
+
  2. Redistributions in binary form must reproduce the above copyright notice,
  this list of conditions and the following disclaimer in the documentation
  and/or other materials provided with the distribution.
- 
+
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -42,6 +42,8 @@
 @property(strong) NSMutableDictionary   *hookDict;
 @property(strong) NSMutableDictionary   *successWatchers;
 
+@property(strong) NSMutableDictionary   *uploadTaskMap;
+
 @end
 
 
@@ -67,7 +69,9 @@
 {
     return [NSSet setWithObjects:@"text/plain", @"text/html", nil];
 }
-#pragma mark -
+
+
+#pragma mark - Singleton MADNESS!
 
 +(TMNetwork*)sharedInstance
 {
@@ -76,7 +80,7 @@
     dispatch_once(&onceToken, ^{
         sharedNetwork = [[TMNetwork alloc] init];
     });
-    
+
     return sharedNetwork;
 }
 
@@ -88,33 +92,33 @@
     if(self)
     {
         NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
-        
+
         NSString * agent = [NSString stringWithFormat:@"%@/%@",
                             [[[NSBundle mainBundle] infoDictionary] objectForKey:(NSString *)kCFBundleIdentifierKey],
                             [[[NSBundle mainBundle] infoDictionary] objectForKey:(NSString *)kCFBundleVersionKey]];
-        
+
         [sessionConfig setHTTPAdditionalHeaders:@{@"Accept": @"application/json",
                                                   @"Accept-Encoding": @"gzip",
                                                   @"User-Agent": agent}];
-        
+
         sessionConfig.timeoutIntervalForRequest = 30.0;
         sessionConfig.timeoutIntervalForResource = 60.0;
         sessionConfig.HTTPMaximumConnectionsPerHost = 10;
-        
-        
+
+
         self.delegateQueue = [[NSOperationQueue alloc] init];
-        
+
         self.session = [NSURLSession sessionWithConfiguration:sessionConfig
                                                      delegate:self
                                                 delegateQueue:self.delegateQueue];
-        
-        self.headers = [NSMutableDictionary dictionaryWithCapacity:2];
-        
-        self.hookDict = [NSMutableDictionary dictionaryWithCapacity:2];
-        self.successWatchers = [NSMutableDictionary dictionaryWithCapacity:2];
 
+        self.headers = [NSMutableDictionary dictionaryWithCapacity:2];
+
+        self.hookDict           = [NSMutableDictionary dictionaryWithCapacity:2];
+        self.successWatchers    = [NSMutableDictionary dictionaryWithCapacity:2];
+        self.uploadTaskMap      = [NSMutableDictionary dictionaryWithCapacity:2];
     }
-    
+
     return self;
 }
 
@@ -129,7 +133,7 @@
 }
 
 
-#pragma mark -
+#pragma mark - HTTP Header management
 
 -(NSString *)valueForHeader:(NSString *)header
 {
@@ -162,8 +166,8 @@
     // create an auth string, base64 encode it then pass it in the auth header (really???)
     NSString *basicAuthCredentials = [NSString stringWithFormat:@"%@:%@", username, password];
     NSString *base64String = [[basicAuthCredentials dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
-    
-    
+
+
     [self setValue:[NSString stringWithFormat:@"Basic %@", base64String]
          forHeader:@"Authorization"];
 }
@@ -175,7 +179,7 @@
         [self clearAuthorizationHeader];
         return;
     }
-    
+
     [self setValue:[NSString stringWithFormat:@"Bearer %@", token]
          forHeader:@"Authorization"];
 }
@@ -187,18 +191,97 @@
         [self clearAuthorizationHeader];
         return;
     }
-    
+
     [self setValue:[NSString stringWithFormat:@"%@ %@", type, token]
          forHeader:@"Authorization"];
 }
-
 
 -(void)clearAuthorizationHeader
 {
     [_headers removeObjectForKey:@"Authorization"];
 }
 
-#pragma mark -
+#pragma mark - HTTP Methods
+
+-(NSURLSessionTask *)multipartPOST:(NSString*)path
+                            asJSON:(BOOL)asJSON
+                            params:(id)params
+                   chunkedEncoding:(BOOL)chunked
+                  bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction
+                           success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
+                           failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
+{
+
+    [[TMNetworkActivityIndicatorManager sharedManager] incrementActivityCount];
+
+    NSURL *url = [NSURL URLWithString:path
+                        relativeToURL:self.baseURL];
+
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
+    [request setHTTPMethod:@"POST"];
+    [request setAllHTTPHeaderFields:_headers];
+
+    TMMultipartInputStream * mpInput = [[TMMultipartInputStream alloc] init];
+
+    //TODO: encode params
+
+    bodyConstruction((id<TMNetworkBodyMaker>)mpInput);
+
+    [request setValue:[NSString stringWithFormat:@"multipart/form-data; boundary=%@", mpInput.boundary]
+   forHTTPHeaderField:@"Content-Type"];
+
+
+    // finally send the request
+    NSURLSessionUploadTask * uploadTask = nil;
+
+    if(chunked)
+    {
+        // create the upload task
+        uploadTask = [self.session uploadTaskWithStreamedRequest:request];
+        // add the stream to the map of task<->stream so the delegate can pick it up
+        self.uploadTaskMap[uploadTask] = [@{
+                                            @"bodyStream": mpInput,
+                                            @"successBlock": success,
+                                            @"failBlock": failure
+                                            } mutableCopy];
+    }
+    else
+    {
+        // if we DONT want chunked encoding then we have to spit all this stuff out into a file
+        // and ask NSURLSession to upload that
+        // This will correctly send a Content-Length header
+        NSString * filename = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
+        NSOutputStream * output = [NSOutputStream outputStreamToFileAtPath:filename
+                                                                    append:NO];
+
+        [output open];
+
+        //[output scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:nil];
+
+        while ([mpInput hasBytesAvailable]) {
+            uint8_t buffer[4096];
+            NSUInteger len = [mpInput read:buffer maxLength:4096];
+            [output write:buffer maxLength:len];
+        }
+
+        uploadTask = [self.session uploadTaskWithRequest:request
+                                                fromFile:[NSURL fileURLWithPath:filename]
+                                       completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                                           [self dealWithResponseStuff:data
+                                                              response:response
+                                                                 error:error
+                                                               success:success
+                                                               failure:failure];
+
+                                           [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
+                                       } ];
+        [output close];
+    }
+    [uploadTask resume];
+
+
+    return uploadTask;
+}
 
 -(NSURLSessionTask *)POST:(NSString*)path
                    asJSON:(BOOL)asJSON
@@ -207,56 +290,26 @@
                   failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
 {
     [[TMNetworkActivityIndicatorManager sharedManager] incrementActivityCount];
-    
-    NSError * error;
+
     NSURL *url = [NSURL URLWithString:path
                         relativeToURL:self.baseURL];
-    
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
-    
-    [request setHTTPMethod:@"POST"];
-    
-    [request setAllHTTPHeaderFields:_headers];
-    
-    // set up the post body data pls!
-    
-    NSData * body = nil;
-    if(params)
-    {
-        NSString *charset = (__bridge NSString *)CFStringConvertEncodingToIANACharSetName(CFStringConvertNSStringEncodingToEncoding(NSUTF8StringEncoding));
-        if (asJSON)
-        {
-            [request setValue:[NSString stringWithFormat:@"application/json; charset=%@", charset]
-           forHTTPHeaderField:@"Content-Type"];
-            
-            body = [NSJSONSerialization dataWithJSONObject:params
-                                                   options:0
-                                                     error:&error];
-        }
-        else
-        {
-            [request setValue:[NSString stringWithFormat:@"application/x-www-form-urlencoded; charset=%@", charset]
-           forHTTPHeaderField:@"Content-Type"];
-            
-            NSString * encodedparams = [params URLParameters];
-            
-            body = [encodedparams dataUsingEncoding:NSUTF8StringEncoding];
-        }
-        
-        if(!body)
-        {
-            failure(nil, nil, nil, error);
-            [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
 
-            return nil;
-        }
-        [request setHTTPBody:body];
-    }
-    else
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
+    [request setHTTPMethod:@"POST"];
+    [request setAllHTTPHeaderFields:_headers];
+
+    // set up the post body data pls!
+
+    NSData * body = [self encodePOSTParameters:params
+                                        asJSON:asJSON
+                                    forRequest:request];
+    if(!body)
     {
-        body= [@"" dataUsingEncoding:NSUTF8StringEncoding];
+        //TODO: error should be a custom error?
+        failure(nil, nil, nil, nil);
+        return nil;
     }
-    
+
     NSURLSessionTask * task = [self.session uploadTaskWithRequest:request
                                                          fromData:body
                                                 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -265,10 +318,10 @@
                                                                           error:error
                                                                         success:success
                                                                         failure:failure];
-                                                    
+
                                                     [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
                                                 }];
-    
+
     [task resume];
     return task;
 }
@@ -280,56 +333,25 @@
                  failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
 {
     [[TMNetworkActivityIndicatorManager sharedManager] incrementActivityCount];
-    
-    NSError * error;
+
     NSURL *url = [NSURL URLWithString:path
                         relativeToURL:self.baseURL];
-    
+
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
-    
     [request setHTTPMethod:@"PUT"];
-    
     [request setAllHTTPHeaderFields:_headers];
-    
+
     // set up the post body data pls!
-    
-    NSData * body = nil;
-    if(params)
+    NSData * body = [self encodePOSTParameters:params
+                                        asJSON:asJSON
+                                    forRequest:request];
+    if(!body)
     {
-        NSString *charset = (__bridge NSString *)CFStringConvertEncodingToIANACharSetName(CFStringConvertNSStringEncodingToEncoding(NSUTF8StringEncoding));
-        if (asJSON)
-        {
-            [request setValue:[NSString stringWithFormat:@"application/json; charset=%@", charset]
-           forHTTPHeaderField:@"Content-Type"];
-            
-            body = [NSJSONSerialization dataWithJSONObject:params
-                                                   options:0
-                                                     error:&error];
-        }
-        else
-        {
-            [request setValue:[NSString stringWithFormat:@"application/x-www-form-urlencoded; charset=%@", charset]
-           forHTTPHeaderField:@"Content-Type"];
-            
-            NSString * encodedparams = [params URLParameters];
-            
-            body = [encodedparams dataUsingEncoding:NSUTF8StringEncoding];
-        }
-        
-        if(!body)
-        {
-            failure(nil, nil, nil, error);
-            [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
-            
-            return nil;
-        }
-        [request setHTTPBody:body];
+        //TODO: error should be a custom error?
+        failure(nil, nil, nil, nil);
+        return nil;
     }
-    else
-    {
-        body= [@"" dataUsingEncoding:NSUTF8StringEncoding];
-    }
-    
+
     NSURLSessionTask * task = [self.session uploadTaskWithRequest:request
                                                          fromData:body
                                                 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -338,10 +360,53 @@
                                                                           error:error
                                                                         success:success
                                                                         failure:failure];
-                                                    
+
                                                     [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
                                                 }];
-    
+
+    [task resume];
+    return task;
+}
+
+
+-(NSURLSessionTask *)PATCH:(NSString*)path
+                    asJSON:(BOOL)asJSON
+                    params:(id)params
+                   success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
+                   failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
+{
+    [[TMNetworkActivityIndicatorManager sharedManager] incrementActivityCount];
+
+    NSURL *url = [NSURL URLWithString:path
+                        relativeToURL:self.baseURL];
+
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
+    [request setHTTPMethod:@"PATCH"];
+    [request setAllHTTPHeaderFields:_headers];
+
+    // set up the post body data pls!
+    NSData * body = [self encodePOSTParameters:params
+                                        asJSON:asJSON
+                                    forRequest:request];
+    if(!body)
+    {
+        //TODO: error should be a custom error?
+        failure(nil, nil, nil, nil);
+        return nil;
+    }
+
+    NSURLSessionTask * task = [self.session uploadTaskWithRequest:request
+                                                         fromData:body
+                                                completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                                                    [self dealWithResponseStuff:data
+                                                                       response:response
+                                                                          error:error
+                                                                        success:success
+                                                                        failure:failure];
+
+                                                    [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
+                                                }];
+
     [task resume];
     return task;
 }
@@ -354,25 +419,28 @@
 
 {
     [[TMNetworkActivityIndicatorManager sharedManager] incrementActivityCount];
-    
+
     NSURL *url = [NSURL URLWithString:path
                         relativeToURL:self.baseURL];
-    
-    
+
     if (params)
     {
         NSString * encodedparams = [params URLParameters];
-        
+
         //TODO: replace this with if(url.query.length) append else set;
-        url = [NSURL URLWithString:[[url absoluteString] stringByAppendingFormat:[path rangeOfString:@"?"].location == NSNotFound ? @"?%@" : @"&%@", encodedparams]];
+        BOOL append = NO;
+        if (url.query &&url.query.length) {
+            append = YES;
+        }
+        url = [NSURL URLWithString:[[url absoluteString] stringByAppendingFormat: !append ? @"?%@" : @"&%@", encodedparams]];
     }
 
-    
+
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
-    
+
     [request setHTTPMethod:@"GET"];
     [request setAllHTTPHeaderFields:_headers];
-    
+
     NSURLSessionTask * task = [self.session dataTaskWithRequest:request
                                               completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
                                                   [self dealWithResponseStuff:data
@@ -380,12 +448,12 @@
                                                                         error:error
                                                                       success:success
                                                                       failure:failure];
-                                                  
+
                                                   [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
                                               }];
-    
+
     [task resume];
-    
+
     return task;
 }
 
@@ -395,16 +463,15 @@
                    failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
 {
     [[TMNetworkActivityIndicatorManager sharedManager] incrementActivityCount];
-    
+
     NSURL *url = [NSURL URLWithString:path
                         relativeToURL:self.baseURL];
-    
-    
+
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url];
-    
+
     [request setHTTPMethod:@"DELETE"];
     [request setAllHTTPHeaderFields:_headers];
-    
+
     NSURLSessionTask * task = [self.session dataTaskWithRequest:request
                                               completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
                                                   [self dealWithResponseStuff:data
@@ -412,16 +479,16 @@
                                                                         error:error
                                                                       success:success
                                                                       failure:failure];
-                                                  
+
                                                   [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
                                               }];
     [task resume];
-    
+
     return task;
 }
 
 
-#pragma mark -
+#pragma mark - response dealing
 
 -(void)determineSuccessAndSend:(id)object
                           data:(NSData*)data
@@ -435,7 +502,7 @@
     if(object && (error == nil))
     {
         // if we get here we got a response, but we still might fail if status != 200,299
-        
+
         if( [TMNetwork hasAcceptableStatusCodeForStatus:response.statusCode])
         {
             success(response, data, object);
@@ -446,18 +513,18 @@
             NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
             [userInfo setValue:[request URL]
                         forKey:NSURLErrorFailingURLErrorKey];
-            
+
             [userInfo setValue:[NSString stringWithFormat:NSLocalizedString(@"HTTP Status: %d", @""), response.statusCode]
                         forKey:NSLocalizedDescriptionKey];
-            
+
             failure(response, data, object, [[NSError alloc] initWithDomain:NSURLErrorDomain
                                                                        code:NSURLErrorBadServerResponse
                                                                    userInfo:userInfo]);
         }
-        
+
         // add a block to iterate the success handlers and call them
         dispatch_async(dispatch_get_global_queue(0, 0), ^{
-            
+
             // call the watchers on a background thread so they dont intefere with the operation of the app
             for (id thing in self.successWatchers) {
                 void (^successHandler)(NSHTTPURLResponse *httpResponse);
@@ -483,10 +550,10 @@
                      success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
                      failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
 {
-    
+
     NSHTTPURLResponse * httpResponse = (NSHTTPURLResponse *)response;
-    
-    
+
+
     NSString *_contentType;
     _contentType = [httpResponse MIMEType];
     if(!_contentType)
@@ -503,8 +570,8 @@
             return;
         }
     }
-    
-    
+
+
     if(error)
     {
         [self determineSuccessAndSend:nil
@@ -521,10 +588,13 @@
         {
             // this was JSON
             NSError * err = nil;
-            id jsonObject = [NSJSONSerialization JSONObjectWithData:data
-                                                            options:0
-                                                              error:&err];
-            
+            id jsonObject = nil;
+
+            if (data) {
+                jsonObject = [NSJSONSerialization JSONObjectWithData:data
+                                                             options:0
+                                                               error:&err];
+            }
             [self determineSuccessAndSend:jsonObject
                                      data:data
                                     error:err
@@ -549,7 +619,7 @@
         {
             // this was AN IMAGE
             //note we DO NOT DECODE THE IMAGE HERE - thats a client-side thing
-            
+
             [self determineSuccessAndSend:data
                                      data:data
                                     error:nil
@@ -572,10 +642,14 @@
     }
 }
 
-- (void)URLSession:(NSURLSession *)session didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential *))completionHandler
+#pragma mark - URLSession delegate stuff
+
+- (void)URLSession:(NSURLSession *)session
+didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
+ completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential *))completionHandler
 {
     //NSString *host = challenge.protectionSpace.host;
-    
+
     if ([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
     {
         if(self.trustInvalidSSL)
@@ -589,7 +663,48 @@
     }
 }
 
--(void)setHook:(BOOL (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))hook forStatusCode:(NSInteger)code
+- (void)URLSession:(NSURLSession *)session
+              task:(NSURLSessionTask *)task
+ needNewBodyStream:(void (^)(NSInputStream *bodyStream))completionHandler
+{
+    TMMultipartInputStream * stream = self.uploadTaskMap[task][@"bodyStream"];
+
+    // we return the stream that maps to the task
+    completionHandler(stream);
+}
+
+
+- (void)URLSession:(NSURLSession *)session
+              task:(NSURLSessionTask *)task
+didCompleteWithError:(NSError *)error
+{
+    [self dealWithResponseStuff:self.uploadTaskMap[task][@"body"]
+                       response:task.response
+                          error:error
+                        success:self.uploadTaskMap[task][@"successBlock"]
+                        failure:self.uploadTaskMap[task][@"failBlock"]];
+
+}
+
+- (void)URLSession:(NSURLSession *)session
+          dataTask:(NSURLSessionDataTask *)dataTask
+    didReceiveData:(NSData *)data
+{
+    self.uploadTaskMap[dataTask][@"body"] = data;
+}
+
+- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
+   didSendBodyData:(int64_t)bytesSent
+    totalBytesSent:(int64_t)totalBytesSent
+totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
+{
+}
+
+
+#pragma mark - status code & success hook
+
+-(void)setHook:(BOOL (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))hook
+ forStatusCode:(NSInteger)code
 {
     if (hook)
     {
@@ -601,7 +716,8 @@
     }
 }
 
--(void)addNetworkSuccessWatchBlock:(void(^)(NSHTTPURLResponse *httpResponse))watcherBlock forObject:(id)object
+-(void)addNetworkSuccessWatchBlock:(void(^)(NSHTTPURLResponse *httpResponse))watcherBlock
+                         forObject:(id)object
 {
     // Allows you to set a block to be called on every "successful" network request
     // We classify success as having gotten *any* response from the server.
@@ -615,5 +731,50 @@
     }
 }
 
+#pragma mark - request building helpers
+
+-(NSData*)encodePOSTParameters:(id)parameters
+                        asJSON:(BOOL)asJSON
+                    forRequest:(NSMutableURLRequest*)request
+{
+    NSError * error = nil;
+    NSData * body = nil;
+    if(parameters)
+    {
+        NSString *charset = (__bridge NSString *)CFStringConvertEncodingToIANACharSetName(CFStringConvertNSStringEncodingToEncoding(NSUTF8StringEncoding));
+        if (asJSON)
+        {
+            [request setValue:[NSString stringWithFormat:@"application/json; charset=%@", charset]
+           forHTTPHeaderField:@"Content-Type"];
+
+            body = [NSJSONSerialization dataWithJSONObject:parameters
+                                                   options:0
+                                                     error:&error];
+        }
+        else
+        {
+            [request setValue:[NSString stringWithFormat:@"application/x-www-form-urlencoded; charset=%@", charset]
+           forHTTPHeaderField:@"Content-Type"];
+            
+            NSString * encodedparams = [parameters URLParameters];
+            
+            body = [encodedparams dataUsingEncoding:NSUTF8StringEncoding];
+        }
+        
+        if(!body)
+        {
+            [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
+            
+            return nil;
+        }
+        [request setHTTPBody:body];
+    }
+    else
+    {
+        body = [@"" dataUsingEncoding:NSUTF8StringEncoding];
+    }
+    
+    return body;
+}
 
 @end
