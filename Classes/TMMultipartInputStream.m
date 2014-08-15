@@ -52,7 +52,7 @@
 
 #import <UIKit/UIKit.h>
 #import <MobileCoreServices/UTType.h>
-#import "PKMultipartInputStream.h"
+#import "TMMultipartInputStream.h"
 
 #define kHeaderStringFormat @"--%@\r\nContent-Disposition: form-data; name=\"%@\"\r\n\r\n"
 //Content-Disposition: form-data; name="adtitle"
