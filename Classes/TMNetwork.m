@@ -644,6 +644,8 @@
 
 #pragma mark - URLSession delegate stuff
 
+#pragma mark - URLSession delegate stuff
+
 - (void)URLSession:(NSURLSession *)session
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential *))completionHandler
@@ -656,11 +658,9 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         {
             completionHandler(NSURLSessionAuthChallengeUseCredential, [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust]);
         }
-        else
-        {
-            completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge,nil);
-        }
     }
+
+    completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
 }
 
 - (void)URLSession:(NSURLSession *)session
