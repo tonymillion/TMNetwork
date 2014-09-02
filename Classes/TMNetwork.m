@@ -645,7 +645,7 @@
 #pragma mark - URLSession delegate stuff
 
 #pragma mark - URLSession delegate stuff
-
+/*
 - (void)URLSession:(NSURLSession *)session
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential *))completionHandler
@@ -657,11 +657,13 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         if(self.trustInvalidSSL)
         {
             completionHandler(NSURLSessionAuthChallengeUseCredential, [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust]);
+            return;
         }
     }
 
     completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
 }
+*/
 
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
@@ -755,16 +757,16 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
         {
             [request setValue:[NSString stringWithFormat:@"application/x-www-form-urlencoded; charset=%@", charset]
            forHTTPHeaderField:@"Content-Type"];
-            
+
             NSString * encodedparams = [parameters URLParameters];
-            
+
             body = [encodedparams dataUsingEncoding:NSUTF8StringEncoding];
         }
-        
+
         if(!body)
         {
             [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
-            
+
             return nil;
         }
         [request setHTTPBody:body];
@@ -773,7 +775,7 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
     {
         body = [@"" dataUsingEncoding:NSUTF8StringEncoding];
     }
-    
+
     return body;
 }
 

@@ -81,7 +81,7 @@
 
 
 @property(strong) NSURL *baseURL;
-@property(assign) BOOL trustInvalidSSL;
+//@property(assign) BOOL trustInvalidSSL;
 
 -(void)setHook:(BOOL (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))hook forStatusCode:(NSInteger)code;
 
