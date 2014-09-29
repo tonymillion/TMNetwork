@@ -93,16 +93,20 @@
     {
         NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
 
-        NSString * agent = [NSString stringWithFormat:@"%@/%@",
+        NSString * version = [[NSBundle mainBundle] objectForInfoDictionaryKey: @"CFBundleShortVersionString"];
+        NSString * build = [[NSBundle mainBundle] objectForInfoDictionaryKey: (NSString *)kCFBundleVersionKey];
+
+        NSString * agent = [NSString stringWithFormat:@"%@/%@ (%@)",
                             [[[NSBundle mainBundle] infoDictionary] objectForKey:(NSString *)kCFBundleIdentifierKey],
-                            [[[NSBundle mainBundle] infoDictionary] objectForKey:(NSString *)kCFBundleVersionKey]];
+                            version,
+                            build];
 
         [sessionConfig setHTTPAdditionalHeaders:@{@"Accept": @"application/json",
                                                   @"Accept-Encoding": @"gzip",
                                                   @"User-Agent": agent}];
 
-        sessionConfig.timeoutIntervalForRequest = 30.0;
-        sessionConfig.timeoutIntervalForResource = 60.0;
+        sessionConfig.timeoutIntervalForRequest = 10.0;
+        sessionConfig.timeoutIntervalForResource = 30.0;
         sessionConfig.HTTPMaximumConnectionsPerHost = 10;
 
 
@@ -250,7 +254,7 @@
         // if we DONT want chunked encoding then we have to spit all this stuff out into a file
         // and ask NSURLSession to upload that
         // This will correctly send a Content-Length header
-        NSString * filename = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
+        NSString * filename = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSProcessInfo processInfo] globallyUniqueString]];
         NSOutputStream * output = [NSOutputStream outputStreamToFileAtPath:filename
                                                                     append:NO];
 
