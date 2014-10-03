@@ -9,7 +9,7 @@
 Pod::Spec.new do |s|
 
   s.name         = "TMNetwork"
-  s.version      = "0.0.3"
+  s.version      = "0.0.4"
   s.summary      = "Simple networking that makes sense."
 
   s.homepage     = "https://github.com/tonymillion/TMNetwork"
@@ -21,7 +21,7 @@ Pod::Spec.new do |s|
 
   s.platform     = :ios, "7.0"
 
-  s.source       = { :git => "https://github.com/tonymillion/TMNetwork.git", :tag => "0.0.3" }
+  s.source       = { :git => "https://github.com/tonymillion/TMNetwork.git", :tag => "0.0.4" }
 
   s.source_files  = "Classes", "Classes/**/*.{h,m}"
   s.exclude_files = "Classes/Exclude"
