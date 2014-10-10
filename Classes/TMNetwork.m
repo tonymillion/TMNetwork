@@ -227,7 +227,19 @@
 
     TMMultipartInputStream * mpInput = [[TMMultipartInputStream alloc] init];
 
-    //TODO: encode params
+    if(params)
+    {
+        if(!asJSON)
+        {
+            [params enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+                [mpInput addParameter:key value:obj];
+            }];
+        }
+        else
+        {
+            //TODO: JSON encoding?
+        }
+    }
 
     bodyConstruction((id<TMNetworkBodyMaker>)mpInput);
 
