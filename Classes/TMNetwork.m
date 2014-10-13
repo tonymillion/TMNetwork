@@ -711,6 +711,8 @@ didCompleteWithError:(NSError *)error
                         success:self.uploadTaskMap[task][@"successBlock"]
                         failure:self.uploadTaskMap[task][@"failBlock"]];
 
+    [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
+
 }
 
 - (void)URLSession:(NSURLSession *)session
