@@ -57,7 +57,12 @@
                    failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure;
 
 -(NSURLSessionTask *)syncMultipartPOST:(NSString*)path
-                            asJSON:(BOOL)asJSON
+                                params:(id)params
+                      bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction
+                               success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
+                               failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure;
+
+-(NSURLSessionTask *)syncMultipartPOST:(NSString*)path
                             params:(id)params
                    chunkedEncoding:(BOOL)chunked
                   bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction

@@ -189,11 +189,24 @@
     dispatch_semaphore_wait(sync_block, DISPATCH_TIME_FOREVER);
 
     return nil;
+}
 
+
+-(NSURLSessionTask *)syncMultipartPOST:(NSString*)path
+                                params:(id)params
+                      bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction
+                               success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
+                               failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
+{
+    return [self syncMultipartPOST:path
+                            params:params
+                   chunkedEncoding:self.useChunkedEncoding
+                  bodyConstruction:bodyConstruction
+                           success:success
+                           failure:failure];
 }
 
 -(NSURLSessionTask *)syncMultipartPOST:(NSString*)path
-                                asJSON:(BOOL)asJSON
                                 params:(id)params
                        chunkedEncoding:(BOOL)chunked
                       bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction
@@ -204,7 +217,6 @@
 
 
     [self multipartPOST:path
-                 asJSON:asJSON
                  params:params
         chunkedEncoding:chunked
        bodyConstruction:bodyConstruction

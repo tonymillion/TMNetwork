@@ -72,16 +72,21 @@
                    failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure;
 
 -(NSURLSessionTask *)multipartPOST:(NSString*)path
-                            asJSON:(BOOL)asJSON
                             params:(id)params
                    chunkedEncoding:(BOOL)chunked
                   bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction
                            success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
                            failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure;
 
+-(NSURLSessionTask *)multipartPOST:(NSString*)path
+                            params:(id)params
+                  bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction
+                           success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
+                           failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure;
+
 
 @property(strong) NSURL *baseURL;
-//@property(assign) BOOL trustInvalidSSL;
+@property(assign) BOOL useChunkedEncoding;
 
 -(void)setHook:(BOOL (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))hook forStatusCode:(NSInteger)code;
 

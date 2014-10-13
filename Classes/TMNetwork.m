@@ -121,6 +121,8 @@
         self.hookDict           = [NSMutableDictionary dictionaryWithCapacity:2];
         self.successWatchers    = [NSMutableDictionary dictionaryWithCapacity:2];
         self.uploadTaskMap      = [NSMutableDictionary dictionaryWithCapacity:2];
+
+        self.useChunkedEncoding = YES;
     }
 
     return self;
@@ -208,7 +210,20 @@
 #pragma mark - HTTP Methods
 
 -(NSURLSessionTask *)multipartPOST:(NSString*)path
-                            asJSON:(BOOL)asJSON
+                            params:(id)params
+                  bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction
+                           success:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject))success
+                           failure:(void (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))failure
+{
+    return [self multipartPOST:path
+                        params:params
+               chunkedEncoding:self.useChunkedEncoding
+              bodyConstruction:bodyConstruction
+                       success:success
+                       failure:failure];
+}
+
+-(NSURLSessionTask *)multipartPOST:(NSString*)path
                             params:(id)params
                    chunkedEncoding:(BOOL)chunked
                   bodyConstruction:(void (^)(id<TMNetworkBodyMaker> maker))bodyConstruction
@@ -229,16 +244,9 @@
 
     if(params)
     {
-        if(!asJSON)
-        {
-            [params enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-                [mpInput addParameter:key value:obj];
-            }];
-        }
-        else
-        {
-            //TODO: JSON encoding?
-        }
+        [params enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+            [mpInput addParameter:key value:obj];
+        }];
     }
 
     bodyConstruction((id<TMNetworkBodyMaker>)mpInput);
@@ -663,24 +671,24 @@
 
 #pragma mark - URLSession delegate stuff
 /*
-- (void)URLSession:(NSURLSession *)session
-didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
+ - (void)URLSession:(NSURLSession *)session
+ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential *))completionHandler
-{
-    //NSString *host = challenge.protectionSpace.host;
+ {
+ //NSString *host = challenge.protectionSpace.host;
 
-    if ([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
-    {
-        if(self.trustInvalidSSL)
-        {
-            completionHandler(NSURLSessionAuthChallengeUseCredential, [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust]);
-            return;
-        }
-    }
+ if ([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
+ {
+ if(self.trustInvalidSSL)
+ {
+ completionHandler(NSURLSessionAuthChallengeUseCredential, [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust]);
+ return;
+ }
+ }
 
-    completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
-}
-*/
+ completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
+ }
+ */
 
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
@@ -774,16 +782,16 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
         {
             [request setValue:[NSString stringWithFormat:@"application/x-www-form-urlencoded; charset=%@", charset]
            forHTTPHeaderField:@"Content-Type"];
-
+            
             NSString * encodedparams = [parameters URLParameters];
-
+            
             body = [encodedparams dataUsingEncoding:NSUTF8StringEncoding];
         }
-
+        
         if(!body)
         {
             [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
-
+            
             return nil;
         }
         [request setHTTPBody:body];
@@ -792,7 +800,7 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
     {
         body = [@"" dataUsingEncoding:NSUTF8StringEncoding];
     }
-
+    
     return body;
 }
 
