@@ -290,8 +290,9 @@
                                                                failure:failure];
 
                                            [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
+
+                                           [output close];
                                        } ];
-        [output close];
     }
     [uploadTask resume];
 
