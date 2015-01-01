@@ -245,7 +245,16 @@
     if(params)
     {
         [params enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-            [mpInput addParameter:key value:obj];
+
+            NSString * valueString = obj;
+
+            if(![obj isKindOfClass:[NSString class]])
+            {
+                obj = [NSString stringWithFormat:@"%@", obj];
+            }
+
+            [mpInput addParameter:key
+                            value:valueString];
         }];
     }
 
