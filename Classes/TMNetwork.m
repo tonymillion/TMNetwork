@@ -122,7 +122,7 @@
         self.successWatchers    = [NSMutableDictionary dictionaryWithCapacity:2];
         self.uploadTaskMap      = [NSMutableDictionary dictionaryWithCapacity:2];
 
-        self.useChunkedEncoding = YES;
+        self.useChunkedEncoding = NO;
     }
 
     return self;
@@ -246,15 +246,8 @@
     {
         [params enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
 
-            NSString * valueString = obj;
-
-            if(![obj isKindOfClass:[NSString class]])
-            {
-                obj = [NSString stringWithFormat:@"%@", obj];
-            }
-
             [mpInput addParameter:key
-                            value:valueString];
+                            value:[NSString stringWithFormat:@"%@", obj]];
         }];
     }
 
