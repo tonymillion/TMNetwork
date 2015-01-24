@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.summary      = "Simple networking that makes sense."
 
   s.homepage           = "https://github.com/tonymillion/TMNetwork"
-  s.license            = "MIT"
+  s.license            = { :type => 'MIT' }
   s.author             = { "Tony Million" => "tonymillion@gmail.com" }
   s.source             = { :git => "https://github.com/tonymillion/TMNetwork.git", :tag => "0.0.4" }
   s.social_media_url   = "http://twitter.com/tonymillion"
