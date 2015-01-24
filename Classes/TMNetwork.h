@@ -179,6 +179,7 @@ in OAuth2 compatible services.
  */
 @property(strong) NSURL *baseURL;
 
+
 /**
  Enable Chunked-Encoding for network requests, which is more optimal, however
  in practice badly supported and thus this is NO by default.
@@ -186,8 +187,26 @@ in OAuth2 compatible services.
 
 @property(assign) BOOL useChunkedEncoding;
 
+
+/**
+  Allows you to set a block to be executed whenever status code `code` is encountered
+  The rationale behind this is a global handler for 401 which will clear the current user/pass/token
+  and log the user out in one place
+
+ @param hook The block to be executed
+ @param code the status code to watch for
+ */
 -(void)setHook:(BOOL (^)(NSHTTPURLResponse *httpResponse, NSData * responseData, id responseObject, NSError *error))hook forStatusCode:(NSInteger)code;
 
+
+/**
+  Allows you to set a block to be executed whenever network activity successfully completes.
+  TMNetwork classifies success as getting *any* response from a server (a 400 for example is still a response)
+  to remove the watcher block, simple pass nil to watcherBlock for the same object.
+
+ @param watcherBlock The block to be executed
+ @param object an object you own to associate the block with (this is used to remove the block later)
+ */
 -(void)addNetworkSuccessWatchBlock:(void(^)(NSHTTPURLResponse *httpResponse))watcherBlock forObject:(id)object;
 
 

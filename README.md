@@ -14,7 +14,6 @@ TMNetwork is a simple to use, very powerful networking library for iOS 7 and abo
 Since an example will tell you far more than a thousand words, heres a basic GET request.
 
 ```
-
     [[TMNetwork sharedInstance] setBaseURL:[NSURL URLWithString:@"https://api.github.com/"]];
 	[[TMNetwork sharedInstance] GET:@"events"
                              params:nil
@@ -30,9 +29,46 @@ In the above example a request is made to github for all the events. Github resp
 
 In the failure case, maybe github responds with a 400 or a 403 (if you make too many requests), the failure block will be called. _However_ if the server responds with a decodable format (i.e. JSON) it will be decoded and passed into responseObject just as in the success case along with an `NSError`
 
-In addition to GET, TMNetwork supports POST, PUT, PATCH, DELETE. It can even do multi-part posts with file attachments so you can build your cat photo sharing network using it. (See the `TMMultipartInputStream` class for more details)
+In addition to GET, TMNetwork supports POST, PUT, PATCH, DELETE.
 
-TMNetwork is designed to be lean and mean, its basically 2 files, with a category which implements synchronous network IO (if you need that kind of thing).
+####Multi-part & file uploads
+
+`TMNetwork` can even do multi-part posts with file attachments so you can build your cat photo sharing network using it. (See the `TMMultipartInputStream` class for more details) Heres an example:
+
+```
+        [[TMNetwork sharedInstance] multipartPOST:@"publish_cat"
+                                           params:@{
+                                                    @"text":@"OMG I LOVE MY CAT",
+                                                }
+                                 bodyConstruction:^(id<TMNetworkBodyMaker> maker) {
+                                     if(self.capturedCatImage)
+                                     {
+                                         [maker addPartWithName:@"cat"
+                                                       filename:@"cat.jpg"
+                                                           data:UIImageJPEGRepresentation(self.capturedCatImage, 0.7)
+                                                    contentType:@"image/jpeg"];
+                                     }
+                                 }
+                            success:^(NSHTTPURLResponse *httpResponse, NSData *responseData, id responseObject) {
+                                }
+                            failure:^(NSHTTPURLResponse *httpResponse, NSData *responseData, id responseObject, NSError *error) {
+                                }];
+```
+
+Here we POST to an endpoint <base>/publish_cat we send the params text=OMG I LOVE MY CAT and include an image, the image shows up as a file (so in PHP it'll show up in `$_FILES` as `cat`).
+
+####Synchronous Category
+
+`TMNetwork` has a category which enables synchronous operation i.e. the networking call will **block** the current thread until it has completed. Generally you dont want to do this, unless you do. If you do make sure all your network operations are happening in a background thread, if you call any of the synchronous calls on the main thread your app will lock up for the duration of the network call.
+
+All of the synchronous operations are identical to the async versions with sync prepended i.e. `syncGet`, `syncPost`, `syncMultipartPOST` etc.
+
+
+####Wrap up
+
+TMNetwork is designed to be lean and mean, its basically 2 files (plus a couple of helpers), with a category which implements synchronous network IO (if you need that kind of thing).
+
+The headers contain appledocs and should guide you through usage.
 
 Finally, TMNetwork is well tested having been used in a number of AppStore apps one of which has 250,000 active users.
 
