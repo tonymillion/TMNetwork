@@ -26,7 +26,7 @@ Since an example will tell you far more than a thousand words, heres a basic GET
 
 Yes TMNetwork has a singleton - I dont care if you dont like it, it also supports alloc/init if you want to avoid the singleton.
 
-In the above example a request is made to gitup for all teh events. Github responds in JSON (which TMNetwork _loves_) and assuming you get a 200 response the success block is called and the __DECODED__ JSON is passed into responseObject (along with the response, and the original request response data).
+In the above example a request is made to github for all the events. Github responds in JSON (which TMNetwork _loves_) and assuming you get a 200 response the success block is called and the __DECODED__ JSON is passed into responseObject (along with the response, and the original request response data).
 
 In the failure case, maybe github responds with a 400 or a 403 (if you make too many requests), the failure block will be called. _However_ if the server responds with a decodable format (i.e. JSON) it will be decoded and passed into responseObject just as in the success case along with an `NSError`
 
