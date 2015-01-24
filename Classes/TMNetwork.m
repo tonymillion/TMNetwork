@@ -330,6 +330,7 @@ THE SOFTWARE.
     {
         //TODO: error should be a custom error?
         failure(nil, nil, nil, nil);
+        [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
         return nil;
     }
 
@@ -372,6 +373,7 @@ THE SOFTWARE.
     {
         //TODO: error should be a custom error?
         failure(nil, nil, nil, nil);
+        [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
         return nil;
     }
 
@@ -415,6 +417,7 @@ THE SOFTWARE.
     {
         //TODO: error should be a custom error?
         failure(nil, nil, nil, nil);
+        [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
         return nil;
     }
 
@@ -790,8 +793,6 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
 
         if(!body)
         {
-            [[TMNetworkActivityIndicatorManager sharedManager] decrementActivityCount];
-
             return nil;
         }
         [request setHTTPBody:body];
